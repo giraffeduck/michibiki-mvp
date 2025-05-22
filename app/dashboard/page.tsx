@@ -26,7 +26,11 @@ type WeekOption = {
 
 const getLastSixMondays = (): WeekOption[] => {
   const mondays: WeekOption[] = []
-  const today = new Date()
+
+  // JST補正：+9時間
+  const now = new Date()
+  const jstOffsetMs = 9 * 60 * 60 * 1000
+  const today = new Date(now.getTime() + jstOffsetMs)
 
   for (let i = 0; i < 6; i++) {
     const date = new Date(today)
