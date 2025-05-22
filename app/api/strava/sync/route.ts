@@ -10,14 +10,24 @@ const supabase = createClient(
 
 const STRAVA_API = 'https://www.strava.com/api/v3/athlete/activities';
 
+// GETリクエスト：手動呼び出し用（strava_id必須）
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const strava_id = searchParams.get('strava_id');
-
   if (!strava_id) {
     return NextResponse.json({ error: 'strava_id is required' }, { status: 400 });
   }
+  return syncStravaActivities(strava_id);
+}
 
+// POSTリクエスト：自動同期用（strava_idをコード内で固定）
+export async function POST(req: NextRequest) {
+  const strava_id = '20828320'; // 仮に固定IDを使う（将来的にlocalStorage対応へ）
+  return syncStravaActivities(strava_id);
+}
+
+// 共通処理（GET/POST両方から呼び出し可能）
+async function syncStravaActivities(strava_id: string) {
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('access_token')
@@ -28,7 +38,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Access token not found for strava_id: ' + strava_id }, { status: 401 });
   }
 
-  // Supabase上の最新start_dateをUNIX時間で取得
   const { data: latest, error: latestError } = await supabase
     .from('activities')
     .select('start_date')
@@ -39,7 +48,6 @@ export async function GET(req: NextRequest) {
 
   const after = latest?.start_date ? Math.floor(new Date(latest.start_date).getTime() / 1000) : 0;
 
-  // Strava APIから差分取得
   const res = await fetch(`${STRAVA_API}?per_page=100&after=${after}`, {
     headers: {
       Authorization: `Bearer ${profile.access_token}`,
