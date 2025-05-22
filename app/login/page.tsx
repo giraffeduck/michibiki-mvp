@@ -1,21 +1,14 @@
 // /app/login/page.tsx
 'use client'
 
-import { createClient } from '@supabase/supabase-js'
-
 export default function LoginPage() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const handleLogin = () => {
+    const clientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID
+    const redirectUri = process.env.NEXT_PUBLIC_STRAVA_REDIRECT_URI
+    const scope = 'read,activity:read'
 
-  const handleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'strava',
-      options: {
-        redirectTo: 'http://localhost:3000/api/auth/callback'
-      }
-    })
+    const stravaAuthUrl = `https://www.strava.com/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`
+    window.location.href = stravaAuthUrl
   }
 
   return (
