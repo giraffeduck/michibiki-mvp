@@ -28,9 +28,15 @@ export async function POST(req: NextRequest) {
   const { start, end } = getWeekRange(weekStart)
   const endStr = end.toISOString().slice(0, 10)
 
+  // ✅ localhost を本番環境で避けるよう修正
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+
   const activitiesRes = await fetch(
-    `http://localhost:3000/api/activities?strava_id=${userId}&start=${weekStart}&end=${endStr}`
+    `${baseUrl}/api/activities?strava_id=${userId}&start=${weekStart}&end=${endStr}`
   )
+
   const allActivities = await activitiesRes.json()
 
   if (!Array.isArray(allActivities)) {
@@ -73,7 +79,6 @@ ${formatActivitiesForPrompt(weekActivities)}
   const gptData = await gptRes.json()
   const message = gptData.choices?.[0]?.message?.content || '生成に失敗しました'
 
-  // ✅ 今が週末（日曜）以降なら Supabase に保存
   const now = new Date()
   if (now >= end) {
     const { error } = await supabase.from('feedback_log').insert({
