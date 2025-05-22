@@ -47,6 +47,10 @@ export default function DashboardPage() {
   const stravaId = 20828320 // TODO: localStorage対応へ移行予定
 
   useEffect(() => {
+    const syncStrava = async () => {
+      await fetch('/api/strava/sync', { method: 'POST' })
+    }
+
     const fetchActivities = async () => {
       const start = selectedWeek
       const endDate = new Date(start)
@@ -56,7 +60,7 @@ export default function DashboardPage() {
       const res = await fetch(`/api/activities?strava_id=${stravaId}&start=${start}&end=${end}`)
       const data = await res.json()
       setActivities(data)
-    };
+    }
 
     const fetchFeedbackFromSupabaseOrGenerate = async () => {
       const { data, error } = await supabase
@@ -85,11 +89,13 @@ export default function DashboardPage() {
       } else {
         setFeedback(data.feedback_text)
       }
-    };
+    }
 
-    fetchActivities();
-    fetchFeedbackFromSupabaseOrGenerate();
-  }, [selectedWeek]);
+    syncStrava().then(() => {
+      fetchActivities()
+      fetchFeedbackFromSupabaseOrGenerate()
+    })
+  }, [selectedWeek])
 
   return (
     <main className="p-6 max-w-4xl mx-auto">
