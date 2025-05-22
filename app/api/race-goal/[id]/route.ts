@@ -1,4 +1,4 @@
-// /app/api/race-goal/param-id/route.ts
+// /app/api/race-goal/[id]/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -9,8 +9,8 @@ const supabase = createClient(
 )
 
 // PUT: 目標の更新
-export async function PUT(req: NextRequest, context: { params: { 'param-id': string } }) {
-  const id = context.params['param-id']
+export async function PUT(req: NextRequest, context: { params: { id: string } }) {
+  const id = context.params.id
   const body = await req.json()
 
   const stravaIdHeader = req.headers.get('x-strava-id')
@@ -47,8 +47,8 @@ export async function PUT(req: NextRequest, context: { params: { 'param-id': str
 }
 
 // DELETE: 目標の削除
-export async function DELETE(req: NextRequest, context: { params: { 'param-id': string } }) {
-  const id = context.params['param-id']
+export async function DELETE(req: NextRequest, context: { params: { id: string } }) {
+  const id = context.params.id
   const stravaIdHeader = req.headers.get('x-strava-id')
 
   if (!stravaIdHeader) {
