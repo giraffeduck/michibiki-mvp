@@ -7,7 +7,7 @@ import styles from "./page.module.css";
 
 export default function Home() {
   const stravaClientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID;
-  const redirectUri = "http://localhost:3000/api/auth/callback";
+  const redirectUri = process.env.NEXT_PUBLIC_STRAVA_REDIRECT_URI;
   const stravaLoginUrl = `https://www.strava.com/oauth/authorize?client_id=${stravaClientId}&redirect_uri=${redirectUri}&response_type=code&scope=activity:read`;
 
   return (
@@ -54,7 +54,7 @@ export default function Home() {
           </a>
         </div>
 
-        {/* 🔶 ここにStravaログインボタンを追加 */}
+        {/* 🔶 Stravaログインボタン */}
         <div style={{ marginTop: "2rem" }}>
           <a href={stravaLoginUrl}>
             <button style={{ padding: "12px 24px", fontSize: "16px", cursor: "pointer" }}>
