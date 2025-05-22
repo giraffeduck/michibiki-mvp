@@ -1,0 +1,76 @@
+// app/api/auth/callback/route.ts
+
+console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+console.log('SUPABASE_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+console.log('STRAVA_CLIENT_ID:', process.env.STRAVA_CLIENT_ID);
+
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const code = url.searchParams.get('code');
+
+  if (!code) {
+    console.error('Missing authorization code');
+    return NextResponse.json({ error: 'Missing authorization code' }, { status: 400 });
+  }
+
+  const tokenRes = await fetch('https://www.strava.com/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: process.env.STRAVA_CLIENT_ID,
+      client_secret: process.env.STRAVA_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code',
+    }),
+  });
+
+  const stravaData = await tokenRes.json();
+
+  if (!stravaData.access_token || !stravaData.athlete) {
+    console.error('Strava token fetch failed:', stravaData);
+    return NextResponse.json({ error: 'Failed to retrieve token/athlete from Strava' }, { status: 500 });
+  }
+
+  const {
+    access_token,
+    refresh_token,
+    athlete,
+  } = stravaData;
+
+  const upsertData = {
+    strava_id: athlete.id,
+    access_token,
+    refresh_token,
+    firstname: athlete.firstname,
+    lastname: athlete.lastname,
+    sex: athlete.sex,
+    weight: athlete.weight,
+    profile: athlete.profile,
+    updated_at: new Date().toISOString(),
+  };
+
+  console.log('Upserting profile to Supabase:', upsertData);
+
+  const { error: upsertError } = await supabase
+    .from('profiles')
+    .upsert(upsertData, { onConflict: 'strava_id' });
+
+  if (upsertError) {
+    console.error('Supabase upsert failed:', upsertError);
+    return NextResponse.json({ error: 'Failed to save profile to Supabase', details: upsertError }, { status: 500 });
+  }
+
+  console.log('Upsert successful!');
+
+  // 成功したら /dashboard に遷移
+  return NextResponse.redirect('http://localhost:3000/dashboard');
+}
