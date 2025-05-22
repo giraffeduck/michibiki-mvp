@@ -7,6 +7,9 @@ export default function LoginPage() {
     const redirectUri = process.env.NEXT_PUBLIC_STRAVA_REDIRECT_URI
     const scope = 'read,activity:read'
 
+    // 🔍 環境変数の中身をブラウザで確認するためのログ出力
+    console.log("Redirect URI:", redirectUri)
+
     const stravaAuthUrl = `https://www.strava.com/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}`
     window.location.href = stravaAuthUrl
   }
