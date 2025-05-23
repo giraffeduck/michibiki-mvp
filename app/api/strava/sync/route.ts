@@ -1,41 +1,44 @@
-// app/api/strava/sync/route.ts
+// /app/api/strava/sync/route.ts
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+)
 
-const STRAVA_API = 'https://www.strava.com/api/v3/athlete/activities';
+const STRAVA_API = 'https://www.strava.com/api/v3/athlete/activities'
 
-// GETリクエスト：手動呼び出し用（strava_id必須）
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const strava_id = searchParams.get('strava_id');
-  if (!strava_id) {
-    return NextResponse.json({ error: 'strava_id is required' }, { status: 400 });
-  }
-  return syncStravaActivities(strava_id);
-}
-
-// POSTリクエスト：自動同期用（strava_idをコード内で固定）
+// POST: 固定 strava_id で同期（本番向け）
 export async function POST(req: NextRequest) {
-  const strava_id = '20828320'; // 仮に固定IDを使う（将来的にlocalStorage対応へ）
-  return syncStravaActivities(strava_id);
+  const strava_id = '20828320'
+  return syncStravaActivities(strava_id)
 }
 
-// 共通処理（GET/POST両方から呼び出し可能）
+// GET: 手動同期テスト用（strava_id をクエリで受け取る）
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const strava_id = searchParams.get('strava_id')
+  if (!strava_id) {
+    console.error('❌ strava_id is missing in GET request')
+    return NextResponse.json({ error: 'strava_id is required' }, { status: 400 })
+  }
+  return syncStravaActivities(strava_id)
+}
+
 async function syncStravaActivities(strava_id: string) {
+  console.log(`🚴 同期開始 for strava_id: ${strava_id}`)
+
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('access_token')
     .eq('strava_id', strava_id)
-    .single();
+    .single()
 
   if (profileError || !profile?.access_token) {
-    return NextResponse.json({ error: 'Access token not found for strava_id: ' + strava_id }, { status: 401 });
+    console.error('❌ Access token 取得失敗:', profileError)
+    return NextResponse.json({ error: 'Access token not found' }, { status: 401 })
   }
 
   const { data: latest, error: latestError } = await supabase
@@ -44,21 +47,32 @@ async function syncStravaActivities(strava_id: string) {
     .eq('strava_id', strava_id)
     .order('start_date', { ascending: false })
     .limit(1)
-    .single();
+    .single()
 
-  const after = latest?.start_date ? Math.floor(new Date(latest.start_date).getTime() / 1000) : 0;
+  if (latestError) {
+    console.error('⚠️ 最新アクティビティ取得失敗:', latestError)
+  }
+
+  const after = latest?.start_date
+    ? Math.floor(new Date(latest.start_date).getTime() / 1000)
+    : 0
+
+  console.log(`📅 最新 after=${after} (UNIX)`)
 
   const res = await fetch(`${STRAVA_API}?per_page=100&after=${after}`, {
     headers: {
       Authorization: `Bearer ${profile.access_token}`,
     },
-  });
+  })
 
-  const activities = await res.json();
+  const activities = await res.json()
 
   if (!Array.isArray(activities)) {
-    return NextResponse.json({ error: 'Invalid Strava response', details: activities }, { status: 500 });
+    console.error('❌ Strava API が配列を返しませんでした:', activities)
+    return NextResponse.json({ error: 'Invalid Strava response', details: activities }, { status: 500 })
   }
+
+  console.log(`✅ ${activities.length} 件のアクティビティを取得`)
 
   const upsertData = activities.map((act) => ({
     id: act.id,
@@ -79,15 +93,18 @@ async function syncStravaActivities(strava_id: string) {
     cadence: act.cadence,
     workout_type: act.workout_type,
     raw: act,
-  }));
+  }))
 
   const { error: upsertError } = await supabase
     .from('activities')
-    .upsert(upsertData, { onConflict: 'id' });
+    .upsert(upsertData, { onConflict: 'id' })
 
   if (upsertError) {
-    return NextResponse.json({ error: 'Failed to upsert', details: upsertError }, { status: 500 });
+    console.error('❌ Supabase upsert 失敗:', upsertError)
+    return NextResponse.json({ error: 'Failed to upsert', details: upsertError }, { status: 500 })
   }
 
-  return NextResponse.json({ message: 'Synced successfully', count: upsertData.length });
+  console.log(`🎉 同期完了: ${upsertData.length} 件 upsert`)
+
+  return NextResponse.json({ message: 'Synced successfully', count: upsertData.length })
 }
