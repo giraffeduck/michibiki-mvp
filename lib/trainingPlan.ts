@@ -19,6 +19,7 @@ export type WeeklyTrainingPlan = {
 };
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const sportOptions = ["Swim", "Bike", "Run", "Strength"] as const;
 
 export function generateWeeklyPlans(
   schedule: WeeklyPhaseSchedule[],
@@ -32,14 +33,22 @@ export function generateWeeklyPlans(
 
     const sessions: TrainingSession[] = days.map((day, idx) => {
       if (weekInfo.phase === "Taper" && (day === "Friday" || day === "Monday")) {
-        return { day, sport: "Rest", intensity: "Z1", durationMin: 0, notes: "Rest day" };
+        return {
+          day,
+          sport: "Rest",
+          intensity: "Z1",
+          durationMin: 0,
+          notes: "Rest day"
+        };
       }
 
-      const sport = ["Swim", "Bike", "Run", "Strength"][idx % 4];
+      const sport = sportOptions[idx % sportOptions.length];
       const intensity =
-        weekInfo.phase === "Build" ? (idx % 3 === 0 ? "Z4" : "Z2") :
-        weekInfo.phase === "Peak" ? (idx % 2 === 0 ? "Z3" : "Z4") :
-        "Z2";
+        weekInfo.phase === "Build"
+          ? (idx % 3 === 0 ? "Z4" : "Z2")
+          : weekInfo.phase === "Peak"
+          ? (idx % 2 === 0 ? "Z3" : "Z4")
+          : "Z2";
 
       return {
         day,
