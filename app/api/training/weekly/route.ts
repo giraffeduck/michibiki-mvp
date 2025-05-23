@@ -21,12 +21,12 @@ export async function GET(req: NextRequest) {
   const today = new Date().toISOString().slice(0, 10);
 
   const { data, error } = await supabase
-    .from("race_goal")
+    .from("race_goal_entry") // ← 正しいテーブル名に修正
     .select("*")
     .eq("strava_id", stravaId)
-    .eq("is_a_race", true) // ← Aレース判定
-    .gte("race_date", today) // ← 今日以降のレース
-    .order("race_date", { ascending: true }) // ← 一番近いものを選ぶ
+    .eq("is_a_race", true)
+    .gte("race_date", today)
+    .order("race_date", { ascending: true })
     .limit(1);
 
   const goal = data?.[0];
