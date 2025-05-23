@@ -18,20 +18,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "strava_id is required" }, { status: 400 });
   }
 
-  const { data: goal, error } = await supabase
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { data, error } = await supabase
     .from("race_goal")
     .select("*")
     .eq("strava_id", stravaId)
-    .order("race_date", { ascending: false })
-    .limit(1)
-    .single();
+    .eq("priority", "A") // 優先度Aのみ
+    .gte("race_date", today) // 今日以降
+    .order("race_date", { ascending: true }) // 近い順に
+    .limit(1);
+
+  const goal = data?.[0];
 
   if (error || !goal) {
     return NextResponse.json({ error: "Goal not found" }, { status: 404 });
   }
 
   const { race_date, available_hours_per_week } = goal;
-  const today = new Date().toISOString().slice(0, 10);
 
   const phases = generatePhaseSchedule(race_date, today);
   const plans = generateWeeklyPlans(phases, available_hours_per_week || 6);
