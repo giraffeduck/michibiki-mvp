@@ -24,9 +24,9 @@ export async function GET(req: NextRequest) {
     .from("race_goal")
     .select("*")
     .eq("strava_id", stravaId)
-    .eq("priority", "A") // 優先度Aのみ
-    .gte("race_date", today) // 今日以降
-    .order("race_date", { ascending: true }) // 近い順に
+    .eq("is_a_race", true) // ← Aレース判定
+    .gte("race_date", today) // ← 今日以降のレース
+    .order("race_date", { ascending: true }) // ← 一番近いものを選ぶ
     .limit(1);
 
   const goal = data?.[0];
@@ -36,7 +36,6 @@ export async function GET(req: NextRequest) {
   }
 
   const { race_date, available_hours_per_week } = goal;
-
   const phases = generatePhaseSchedule(race_date, today);
   const plans = generateWeeklyPlans(phases, available_hours_per_week || 6);
 
