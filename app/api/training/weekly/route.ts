@@ -18,13 +18,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "strava_id is required" }, { status: 400 });
   }
 
-  // 日付を ISO 形式 (00:00 UTC) に整形
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const isoToday = today.toISOString(); // e.g. "2025-05-23T00:00:00.000Z"
+  today.setUTCHours(0, 0, 0, 0);
+  const isoToday = today.toISOString(); // e.g., "2025-05-23T00:00:00.000Z"
 
-  // strava_id を数値に変換（Supabaseが bigint型 の場合に備える）
   const numericStravaId = Number(stravaId);
+
+  console.log("[DEBUG] Querying race_goal_entry with:", {
+    strava_id: numericStravaId,
+    is_a_race: true,
+    race_date_gte: isoToday,
+  });
 
   const { data, error } = await supabase
     .from("race_goal_entry")
@@ -34,6 +38,9 @@ export async function GET(req: NextRequest) {
     .gte("race_date", isoToday)
     .order("race_date", { ascending: true })
     .limit(1);
+
+  console.log("[DEBUG] Supabase data result:", data);
+  console.log("[DEBUG] Supabase error:", error);
 
   const goal = data?.[0];
 
