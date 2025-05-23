@@ -23,22 +23,34 @@ const sportOptions = ["Swim", "Bike", "Run", "Strength"] as const;
 
 export function generateWeeklyPlans(
   schedule: WeeklyPhaseSchedule[],
-  availableHoursPerWeek: number
+  weekdayHours: number,
+  weekendHours: number
 ): WeeklyTrainingPlan[] {
-  return schedule.map((weekInfo) => {
-    const baseMinutes = availableHoursPerWeek * 60;
-    const restRatio = weekInfo.phase === "Taper" ? 0.4 : 0.15;
-    const trainingMinutes = Math.floor(baseMinutes * (1 - restRatio));
-    const sessionMinutes = Math.floor(trainingMinutes / 6); // 6日トレーニング想定
+  const weekdayMin = weekdayHours * 60;
+  const weekendMin = weekendHours * 60;
 
+  const dayToMinutes: Record<string, number> = {
+    Monday: weekdayMin / 5,
+    Tuesday: weekdayMin / 5,
+    Wednesday: weekdayMin / 5,
+    Thursday: weekdayMin / 5,
+    Friday: weekdayMin / 5,
+    Saturday: weekendMin / 2,
+    Sunday: weekendMin / 2,
+  };
+
+  return schedule.map((weekInfo) => {
     const sessions: TrainingSession[] = days.map((day, idx) => {
-      if (weekInfo.phase === "Taper" && (day === "Friday" || day === "Monday")) {
+      const isRestDay =
+        weekInfo.phase === "Taper" && (day === "Monday" || day === "Friday");
+
+      if (isRestDay) {
         return {
           day,
           sport: "Rest",
           intensity: "Z1",
           durationMin: 0,
-          notes: "Rest day"
+          notes: "Rest day",
         };
       }
 
@@ -54,7 +66,7 @@ export function generateWeeklyPlans(
         day,
         sport,
         intensity,
-        durationMin: sessionMinutes,
+        durationMin: Math.round(dayToMinutes[day]),
         notes: `${sport} ${intensity} training`,
       };
     });
