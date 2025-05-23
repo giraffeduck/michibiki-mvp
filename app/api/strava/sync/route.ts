@@ -9,6 +9,7 @@ const supabase = createClient(
 )
 
 const STRAVA_API = 'https://www.strava.com/api/v3/athlete/activities'
+const STRAVA_TOKEN_URL = 'https://www.strava.com/api/v3/oauth/token'
 
 // POST: 固定 strava_id で同期（本番向け）
 export async function POST(req: NextRequest) {
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
   return syncStravaActivities(strava_id)
 }
 
-// GET: 手動同期テスト用（strava_id をクエリで受け取る）
+// GET: 手動同期テスト用
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const strava_id = searchParams.get('strava_id')
@@ -32,15 +33,58 @@ async function syncStravaActivities(strava_id: string) {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('access_token')
+    .select('access_token, refresh_token')
     .eq('strava_id', strava_id)
     .single()
 
   if (profileError || !profile?.access_token) {
-    console.error('❌ Access token 取得失敗:', profileError)
+    console.error('❌ access_token not found:', profileError)
     return NextResponse.json({ error: 'Access token not found' }, { status: 401 })
   }
 
+  let access_token = profile.access_token
+
+  // 試しに取得してみる
+  let res = await fetch(`${STRAVA_API}?per_page=1`, {
+    headers: {
+      Authorization: `Bearer ${access_token}`,
+    },
+  })
+
+  // トークン無効ならrefreshして再試行
+  if (res.status === 401 && profile.refresh_token) {
+    console.warn('🔄 access_token expired, refreshing...')
+    const tokenRes = await fetch(STRAVA_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: process.env.STRAVA_CLIENT_ID,
+        client_secret: process.env.STRAVA_CLIENT_SECRET,
+        grant_type: 'refresh_token',
+        refresh_token: profile.refresh_token,
+      }),
+    })
+
+    const tokenData = await tokenRes.json()
+
+    if (!tokenData.access_token) {
+      console.error('❌ トークン更新失敗:', tokenData)
+      return NextResponse.json({ error: 'Failed to refresh token' }, { status: 401 })
+    }
+
+    access_token = tokenData.access_token
+
+    // Supabaseのprofilesを更新
+    await supabase.from('profiles').update({
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token,
+      updated_at: new Date().toISOString(),
+    }).eq('strava_id', strava_id)
+
+    console.log('✅ トークン更新成功')
+  }
+
+  // 最新start_dateをUNIXで取得
   const { data: latest, error: latestError } = await supabase
     .from('activities')
     .select('start_date')
@@ -49,26 +93,18 @@ async function syncStravaActivities(strava_id: string) {
     .limit(1)
     .single()
 
-  if (latestError) {
-    console.error('⚠️ 最新アクティビティ取得失敗:', latestError)
-  }
-
   const after = latest?.start_date
     ? Math.floor(new Date(latest.start_date).getTime() / 1000)
     : 0
 
-  console.log(`📅 最新 after=${after} (UNIX)`)
-
-  const res = await fetch(`${STRAVA_API}?per_page=100&after=${after}`, {
-    headers: {
-      Authorization: `Bearer ${profile.access_token}`,
-    },
+  res = await fetch(`${STRAVA_API}?per_page=100&after=${after}`, {
+    headers: { Authorization: `Bearer ${access_token}` },
   })
 
   const activities = await res.json()
 
   if (!Array.isArray(activities)) {
-    console.error('❌ Strava API が配列を返しませんでした:', activities)
+    console.error('❌ Strava API did not return array:', activities)
     return NextResponse.json({ error: 'Invalid Strava response', details: activities }, { status: 500 })
   }
 
@@ -100,11 +136,10 @@ async function syncStravaActivities(strava_id: string) {
     .upsert(upsertData, { onConflict: 'id' })
 
   if (upsertError) {
-    console.error('❌ Supabase upsert 失敗:', upsertError)
+    console.error('❌ Supabase upsert failed:', upsertError)
     return NextResponse.json({ error: 'Failed to upsert', details: upsertError }, { status: 500 })
   }
 
   console.log(`🎉 同期完了: ${upsertData.length} 件 upsert`)
-
   return NextResponse.json({ message: 'Synced successfully', count: upsertData.length })
 }
