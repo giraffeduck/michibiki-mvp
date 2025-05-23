@@ -20,15 +20,9 @@ export async function GET(req: NextRequest) {
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
-  const isoToday = today.toISOString(); // e.g., "2025-05-23T00:00:00.000Z"
+  const isoToday = today.toISOString();
 
   const numericStravaId = Number(stravaId);
-
-  console.log("[DEBUG] Querying race_goal_entry with:", {
-    strava_id: numericStravaId,
-    is_a_race: true,
-    race_date_gte: isoToday,
-  });
 
   const { data, error } = await supabase
     .from("race_goal_entry")
@@ -39,19 +33,19 @@ export async function GET(req: NextRequest) {
     .order("race_date", { ascending: true })
     .limit(1);
 
-  console.log("[DEBUG] Supabase data result:", data);
-  console.log("[DEBUG] Supabase error:", error);
-
   const goal = data?.[0];
 
   if (error || !goal) {
     return NextResponse.json({ error: "Goal not found" }, { status: 404 });
   }
 
-  const { race_date, available_hours_per_week } = goal;
+  const { race_date, training_time_weekday_hr, training_time_weekend_hr } = goal;
+
+  const weekday = training_time_weekday_hr ?? 4; // fallback値あり
+  const weekend = training_time_weekend_hr ?? 2;
 
   const phases = generatePhaseSchedule(race_date, isoToday);
-  const plans = generateWeeklyPlans(phases, available_hours_per_week || 6);
+  const plans = generateWeeklyPlans(phases, weekday, weekend);
 
   return NextResponse.json({ plans });
 }
