@@ -1,4 +1,5 @@
 // app/api/activities/route.ts
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -8,36 +9,25 @@ const supabase = createClient(
 )
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-
-  const strava_id = searchParams.get('strava_id')
-  const start = searchParams.get('start') // YYYY-MM-DD
-  const end = searchParams.get('end')     // YYYY-MM-DD
-
-  if (!strava_id) {
-    return NextResponse.json({ error: 'Missing strava_id' }, { status: 400 })
+  const stravaIdHeader = req.headers.get('x-strava-id')
+  if (!stravaIdHeader) {
+    return NextResponse.json({ error: 'Unauthorized: missing strava_id' }, { status: 401 })
   }
 
-  // クエリを組み立て
-  let query = supabase
+  const strava_id = Number(stravaIdHeader)
+  if (isNaN(strava_id)) {
+    return NextResponse.json({ error: 'Invalid strava_id format' }, { status: 400 })
+  }
+
+  const { data, error } = await supabase
     .from('activities')
-    .select('id, name, type, distance, moving_time, start_date')
+    .select('*')
     .eq('strava_id', strava_id)
     .order('start_date', { ascending: false })
 
-  if (start) {
-    query = query.gte('start_date', `${start}T00:00:00Z`)
-  }
-
-  if (end) {
-    query = query.lte('start_date', `${end}T23:59:59Z`)
-  }
-
-  const { data, error } = await query
-
   if (error) {
-    return NextResponse.json({ error: 'Supabase query failed', details: error }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json(data)
+  return NextResponse.json({ data })
 }
