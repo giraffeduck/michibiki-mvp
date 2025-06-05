@@ -1,101 +1,62 @@
 // app/api/feedback/route.ts
-import { NextRequest } from 'next/server'
-import { supabase } from '@/lib/supabase'
 
-function formatActivitiesForPrompt(activities: any[]): string {
-  if (activities.length === 0) return '(アクティビティ記録がありません)'
-  return activities.map((a: any) =>
-    `・${a.start_date.slice(0, 10)} ${a.type} ${(a.distance / 1000).toFixed(1)}km ${Math.round(a.moving_time / 60)}分`
-  ).join('\n')
-}
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-function getWeekRange(weekStartStr: string) {
-  const start = new Date(weekStartStr)
-  const end = new Date(start)
-  end.setDate(start.getDate() + 6)
-  return { start, end }
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+export async function GET(req: NextRequest) {
+  const stravaIdHeader = req.headers.get('x-strava-id')
+  if (!stravaIdHeader) {
+    return NextResponse.json({ error: 'Unauthorized: missing strava_id' }, { status: 401 })
+  }
+
+  const strava_id = Number(stravaIdHeader)
+  if (isNaN(strava_id)) {
+    return NextResponse.json({ error: 'Invalid strava_id format' }, { status: 400 })
+  }
+
+  const { data, error } = await supabase
+    .from('feedback_log')
+    .select('*')
+    .eq('strava_id', strava_id)
+    .order('week_start', { ascending: false })
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ data })
 }
 
 export async function POST(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const weekStart = searchParams.get('week')
-  const userId = 20828320
-
-  if (!weekStart) {
-    return new Response('Missing week parameter', { status: 400 })
+  const stravaIdHeader = req.headers.get('x-strava-id')
+  if (!stravaIdHeader) {
+    return NextResponse.json({ error: 'Unauthorized: missing strava_id' }, { status: 401 })
   }
 
-  const { start, end } = getWeekRange(weekStart)
-  const endStr = end.toISOString().slice(0, 10)
-
-  // ✅ localhost を本番環境で避けるよう修正
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-
-  const activitiesRes = await fetch(
-    `${baseUrl}/api/activities?strava_id=${userId}&start=${weekStart}&end=${endStr}`
-  )
-
-  const allActivities = await activitiesRes.json()
-
-  if (!Array.isArray(allActivities)) {
-    console.error('❌ /api/activities の戻り値が配列ではありません:', allActivities)
-    return new Response('アクティビティ取得失敗', { status: 500 })
+  const strava_id = Number(stravaIdHeader)
+  if (isNaN(strava_id)) {
+    return NextResponse.json({ error: 'Invalid strava_id format' }, { status: 400 })
   }
 
-  const weekActivities = allActivities.filter((a: any) => {
-    const date = new Date(a.start_date)
-    return date >= start && date <= end
-  })
+  const body = await req.json()
+  const { week_start, feedback_text } = body
 
-  if (weekActivities.length === 0) {
-    return new Response('該当週のアクティビティが見つかりませんでした。', { status: 200 })
+  if (!week_start || !feedback_text) {
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  const prompt = `
-あなたはプロのトライアスロンコーチです。以下はアスリートの1週間のトレーニング記録です。
-各種目（Swim, Bike, Run, その他）のバランス、距離、時間、種目の偏りをもとに簡潔なフィードバックを日本語で出してください。
+  const { data, error } = await supabase
+    .from('feedback_log')
+    .insert([{ strava_id, week_start, feedback_text }])
 
-【トレーニング記録】
-${formatActivitiesForPrompt(weekActivities)}
-
-【フィードバック】
-`
-
-  const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-    }),
-  })
-
-  const gptData = await gptRes.json()
-  const message = gptData.choices?.[0]?.message?.content || '生成に失敗しました'
-
-  const now = new Date()
-  if (now >= end) {
-    const { error } = await supabase.from('feedback_log').insert({
-      strava_id: userId,
-      week_start: weekStart,
-      feedback_text: message,
-    })
-
-    if (error) {
-      console.error('❌ Supabase insert error:', error)
-    }
-  } else {
-    console.log('🕒 今は週の途中。フィードバックは保存せず、表示のみ。')
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return new Response(message, {
-    status: 200,
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-  })
+  return NextResponse.json({ data })
 }
