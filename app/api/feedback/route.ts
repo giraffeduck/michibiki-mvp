@@ -7,20 +7,21 @@ export async function GET(req: NextRequest) {
   const strava_id = url.searchParams.get('strava_id')
   const week = url.searchParams.get('week')
 
+  console.log('🟡 GET /feedback called')
+  console.log('req.url:', req.url)
+  console.log('Authorization header:', req.headers.get('Authorization'))
+  console.log('query strava_id:', strava_id, 'week:', week)
+
   if (!strava_id || !week) {
-    return NextResponse.json({ error: 'Missing query parameters' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Missing required query parameters (strava_id, week)' },
+      { status: 400 }
+    )
   }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: {
-          Authorization: req.headers.get('Authorization') ?? '',
-        },
-      }
-    }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
   const { data, error } = await supabase
@@ -31,10 +32,11 @@ export async function GET(req: NextRequest) {
     .order('week_start', { ascending: false })
 
   if (error) {
-    console.error('GET /feedback error:', error)
+    console.error('❌ Supabase error (feedback):', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  console.log('✅ feedbacks fetched:', data?.length ?? 0)
   return NextResponse.json(data)
 }
 
@@ -42,24 +44,22 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { strava_id, week_start, feedback_text } = body
 
+  console.log('🟡 POST /feedback called')
+  console.log('payload:', body)
+
   if (!strava_id || !week_start || !feedback_text) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Missing required fields (strava_id, week_start, feedback_text)' },
+      { status: 400 }
+    )
   }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: {
-          Authorization: req.headers.get('Authorization') ?? '',
-        },
-      }
-    }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
   const payload = { strava_id, week_start, feedback_text }
-  console.log('insert payload:', payload)
 
   const { data, error } = await supabase
     .from('feedback_log')
@@ -67,9 +67,10 @@ export async function POST(req: NextRequest) {
     .select()
 
   if (error) {
-    console.error('POST /feedback insert error:', error)
+    console.error('❌ Supabase insert error (feedback):', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  console.log('✅ feedback inserted:', data)
   return NextResponse.json(data)
 }
