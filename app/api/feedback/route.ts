@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
     .order('week_start', { ascending: false })
 
   if (error) {
+    console.error('GET /feedback error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
@@ -50,11 +51,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  const payload = { strava_id, week_start, feedback_text }
+  console.log('insert payload:', payload)
+
   const { data, error } = await supabase
     .from('feedback_log')
-    .insert([{ strava_id, week_start, feedback_text }])
+    .insert([payload])
+    .select()
 
   if (error) {
+    console.error('POST /feedback insert error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
