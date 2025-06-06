@@ -23,20 +23,26 @@ export default function DashboardPage() {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
   const [stravaId, setStravaId] = useState<number | null>(null)
 
+  // ✅ strava_id を localStorage から取得して、ログを出力
   useEffect(() => {
     const id = localStorage.getItem('strava_id')
     if (id) {
-      setStravaId(parseInt(id))
+      const parsedId = parseInt(id)
+      console.log('✅ strava_id 取得:', parsedId)
+      setStravaId(parsedId)
+    } else {
+      console.warn('⚠️ strava_id が localStorage に存在しません')
     }
   }, [])
 
+  // 🔄 strava_id が取得できたらアクティビティとフィードバックを取得
   useEffect(() => {
     const fetchActivities = async () => {
       if (!stravaId) return
 
       const now = new Date()
       const weekStart = new Date(now)
-      weekStart.setDate(now.getDate() - now.getDay() + 1) // 月曜日を週の始まりとする
+      weekStart.setDate(now.getDate() - now.getDay() + 1)
       const weekEnd = new Date(weekStart)
       weekEnd.setDate(weekStart.getDate() + 6)
 
@@ -46,9 +52,10 @@ export default function DashboardPage() {
       const res = await fetch(`/api/activities?strava_id=${stravaId}&start=${start}&end=${end}`)
       if (res.ok) {
         const data = await res.json()
+        console.log('✅ activities 取得成功:', data)
         setActivities(data)
       } else {
-        console.error('アクティビティ取得失敗:', await res.text())
+        console.error('❌ アクティビティ取得失敗:', await res.text())
       }
     }
 
@@ -63,9 +70,10 @@ export default function DashboardPage() {
       const res = await fetch(`/api/feedback?strava_id=${stravaId}&week=${week}`)
       if (res.ok) {
         const data = await res.json()
+        console.log('✅ feedback 取得成功:', data)
         setFeedbacks(data)
       } else {
-        console.error('フィードバック取得失敗:', await res.text())
+        console.error('❌ フィードバック取得失敗:', await res.text())
       }
     }
 
